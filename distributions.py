@@ -14,7 +14,7 @@ class Distribution(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def predict(self,X,weights):
+    def probs(self,X,q):
         pass
 
 class Bayesian_NN_Eager(Distribution):
@@ -23,12 +23,17 @@ class Bayesian_NN_Eager(Distribution):
 
         assert(tf.executing_eagerly())
 
-        self.X_train = tf.constant(X_train)
-        self.y_train = tf.constant(y_train)
+        self.X_train = tf.constant(X_train, dtype=tf.float32)
+        self.y_train = tf.constant(y_train, dtype=tf.float32)
 
         self.var = var
 
+    @staticmethod
+    def to_tensor(numpy_list):
+        return [ tf.convert_to_tensor for l in numpy_list ]
+
     def negative_log_posterior(self,WS):
+        WS = self.to_tensor(WS)
 
         nl_prior = 0
         for w in WS:
@@ -45,6 +50,7 @@ class Bayesian_NN_Eager(Distribution):
         return nll + nl_prior
 
     def negative_log_posterior_gradient(self,WS):
+        WS = self.to_tensor(WS)
 
         with tf.GradientTape() as g:
             g.watch(WS)
@@ -53,7 +59,7 @@ class Bayesian_NN_Eager(Distribution):
 
         return g.gradient(nlp,WS)
 
-    def predict(self, X_test, WS):
+    def probs(self, X_test, WS):
         Z = self.X_train
         for w in WS[:-1]:
             Z = tf.tanh(Z @ w)
@@ -62,14 +68,14 @@ class Bayesian_NN_Eager(Distribution):
 class Bayesian_NN_Session(Distribution):
 
     def __init__(self, X_train, y_train, layers, var=2.0):
-        self.X_train = tf.constant(X_train)
-        self.y_train = tf.constant(y_train)
+        self.X_train = tf.constant(X_train, dtype=tf.float32)
+        self.y_train = tf.constant(y_train, dtype=tf.float32)
         self.layers = layers
         self.var = var
 
         self.sess = tf.Session()
 
-        self.weights = [tf.placeholder(tf.float32, shape=dim) for dim in layers ]
+        self.weights = tuple([tf.placeholder(tf.float32, shape=dim) for dim in layers ])
 
         nl_prior = 0
         for w in self.weights:
@@ -80,7 +86,7 @@ class Bayesian_NN_Session(Distribution):
         for w in self.weights[:-1]:
             Z = tf.tanh(Z @ w)
         self.y_hat_train = softmax(Z @ self.weights[-1])
-        self.nll = categorical_crossentropy(self.y_train, self.y_hat_train)
+        self.nll = tf.reduce_sum(categorical_crossentropy(self.y_train, self.y_hat_train))
 
         self.loss = self.nll + self.nl_prior
 
@@ -94,10 +100,10 @@ class Bayesian_NN_Session(Distribution):
         self.y_hat = softmax(Z @ self.weights[-1])
 
     def negative_log_posterior(self,WS):
-        return self.sess.run(self.loss, {self.weights : WS})
+        return self.sess.run(self.loss, {self.weights : tuple(WS) })
 
     def negative_log_posterior_gradient(self,WS):
-        return self.sess.run(self.grads, {self.weights : WS})
+        return self.sess.run(self.grads, {self.weights : tuple(WS) })
 
-    def predict(self,X_test,WS):
-        return self.sess.run(self.y_hat, {self.weights: WS, self.X_test : X_test})
+    def probs(self,X_test,WS):
+        return self.sess.run(self.y_hat, {self.weights: tuple(WS), self.X_test : X_test})
