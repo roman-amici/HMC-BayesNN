@@ -164,5 +164,5 @@ def normalized_search(
                 )
 
 #acceptance_rate_search("unnormalized.csv")
-for samples in [10000,50000]:
-    normalized_search("normalized.csv", samples, 5)
+
+normalized_search("normalized-beast.csv", 50000, 10, 3000, 500)

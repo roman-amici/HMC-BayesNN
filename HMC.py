@@ -82,12 +82,12 @@ def stochastic_hamiltonian_monte_carlo(
     y_train,
     distribution,
     q0,
-    friction,
-    batch_size=64,
+    friction=0.01, #Momentum decay rate in SGD
+    batch_size=500,
     n_samples=800,
     path_len=1,
     step_size=0.5, 
-    burnin=200,):
+    burnin=200):
   
   momentum_distribution = norm(0,1)
 
@@ -98,21 +98,21 @@ def stochastic_hamiltonian_monte_carlo(
 
   progress_bar = Progbar(size)
 
-  q_old = q0
+  q = q0
 
   for i in range(size):
 
-    p_old = momentum_distribution.rvs(size=q0.shape)
+    p = momentum_distribution.rvs(size=q0.shape)
     take_indices = np.random.randint(0, X_train.size[0], size=batch_size ) #Sample with replacement -- condition for convergence
     X_batch = X_train[take_indices, :]
     y_batch = y_train[take_indices, :]
     distribution.set_train(X_batch, y_batch)
-    info = distribution.emperical_fisher_information(q_old)
+    info = distribution.emperical_fisher_information(q)
     sigma = 2*(friction - info)*step_size
-    noise_distribution = multivariate_normal(np.zeros_like(q_old), sigma)
+    noise_distribution = multivariate_normal(np.zeros_like(q), sigma)
     
-    p_new,q_new = integrators.stochastic_euler_forward(p_old,q_old,distribution,noise_distribution, friction,path_len,step_size)
+    p,q = integrators.stochastic_euler_forward(p,q,distribution,noise_distribution, friction,path_len,step_size)
 
-    progress_bar.update(i+1, values=[ ("acceptance_rate", accept) ])
+    progress_bar.update(i+1)
 
   return samples, n_accept / len(samples)

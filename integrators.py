@@ -138,6 +138,6 @@ def stochastic_euler_forward(
         
         dq = distribution.negative_log_posterior_gradient(q)
         noise = noise_distribution.rvs(1) #See if drawing in bulk is faster
-        p += -step_size * dq - step_size*(friction @ p) + noise
+        p += -step_size * dq - step_size*p*friction + noise #Assume that friction is a scalar for now
 
     return -p,q

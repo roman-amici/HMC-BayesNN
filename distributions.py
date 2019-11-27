@@ -109,6 +109,54 @@ class Bayesian_NN_Session(Distribution):
     def probs(self,X_test,WS):
         return self.sess.run(self.y_hat, {self.weights: tuple(WS), self.X_test : X_test})
 
+class Bayesian_NN_Session_2Layer(Distribution):
+    def __init__(self, X_train, y_train, layers, var=2.0):
+        self.X_train = tf.constant(X_train, dtype=tf.float32)
+        self.y_train = tf.constant(y_train, dtype=tf.float32)
+        self.layers = layers
+        self.var = var
+
+        self.sess = tf.Session()
+
+        self.weights = tuple([tf.placeholder(tf.float32, shape=dim) for dim in layers ])
+        
+        self.X_test = 1
+        Z = self.X_test
+        for w in self.weights[:-1]:
+            Z = tf.tanh(Z @ w)
+        self.y_hat = softmax(Z @ self.weights[-1])
+
+def __negative_log_posterior(self,X,y,ws):
+        nl_prior = 0
+        for w in ws:
+            nl_prior += tf.reduce_sum(w**2)
+        nl_prior = nl_prior / (2*self.var)
+
+        Z = X
+        for w in ws:
+            Z = tf.tanh(Z @ w)
+        y_hat = softmax(Z @ self.weights[-1])
+        nll = tf.reduce_sum(categorical_crossentropy(y, y_hat))
+
+        return nll + nl_prior
+
+def __negative_log_posterior_gradient(self, X, y, ws):
+    loss = self.__negative_log_posterior(X,y,ws)
+    grads = [ tf.gradients(loss, w)[0] for w in ws]
+    return grads
+
+def __leapfrog(self, ):
+    pass
+
+def negative_log_posterior(self,WS):
+    return self.sess.run(self.loss, {self.weights : tuple(WS) })
+
+def negative_log_posterior_gradient(self,WS):
+    return self.sess.run(self.grads, {self.weights : tuple(WS) })
+
+def probs(self,X_test,WS):
+    return self.sess.run(self.y_hat, {self.weights: tuple(WS), self.X_test : X_test})
+
 class Stochastic_Bayesian_NN_Session(Distribution):
 
     def __init__(self, input_dim, output_dim, layers, var=2.0):
