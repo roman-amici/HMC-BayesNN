@@ -112,7 +112,7 @@ def acceptance_rate_search(
 
 def normalized_search(
     filename="tests.txt",
-    input_size=2500,
+    input_size=5000,
     path_length=1,
     n_samples=800,
     burnin=200):
@@ -129,7 +129,7 @@ def normalized_search(
 
         for stage in [1,2,3]:
             print("Stage", stage)
-            for eps_base in [.025, .01, .005]:
+            for eps_base in [.01, .005]:
                 eps = eps_base * stage
 
                 print("Step_size:",eps)
@@ -163,5 +163,6 @@ def normalized_search(
                     average_accuracy
                 )
 
-acceptance_rate_search("unnormalized.csv")
-normalized_search("normalized.csv")
+#acceptance_rate_search("unnormalized.csv")
+for samples in [10000,50000]:
+    normalized_search("normalized.csv", samples, 5)

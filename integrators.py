@@ -124,3 +124,20 @@ def three_stage_symplectic(p, q, distribution, path_len, step_size):
             p_i += -step_size * C_THREE * dq_i
 
     return [-p_i for p_i in p], q
+
+def stochastic_euler_forward(
+    p, q, distribution, noise_distribution, friction, path_len, step_size):
+    p = [p_i.copy() for p_i in p]
+    q = [q_i.copy() for q_i in q]
+
+    n_steps = int(path_len / step_size)
+
+    for _ in range(n_steps):
+
+        q += step_size*p
+        
+        dq = distribution.negative_log_posterior_gradient(q)
+        noise = noise_distribution.rvs(1) #See if drawing in bulk is faster
+        p += -step_size * dq - step_size*(friction @ p) + noise
+
+    return -p,q
