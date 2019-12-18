@@ -69,6 +69,11 @@ class Bayesian_NN_Eager(Distribution):
 class Bayesian_NN_Session(Distribution):
 
     def __init__(self, X_train, y_train, layers, var=2.0):
+
+        self.__init_NN(X_train,y_train,layers,var)
+
+
+    def __init_NN(self,X_train,y_train,layers,var):
         self.X_train = tf.constant(X_train, dtype=tf.float32)
         self.y_train = tf.constant(y_train, dtype=tf.float32)
         self.layers = layers
@@ -109,8 +114,9 @@ class Bayesian_NN_Session(Distribution):
     def probs(self,X_test,WS):
         return self.sess.run(self.y_hat, {self.weights: tuple(WS), self.X_test : X_test})
 
-class Bayesian_NN_Session_2Layer(Distribution):
-    def __init__(self, X_train, y_train, layers, var=2.0):
+class Bayesian_NN_Session_TFIntegrator():
+
+    def __init__(self, X_train, y_train, layers, integrator_stage=1, path_len=10, step_size=1e-3, var=2.0):
         self.X_train = tf.constant(X_train, dtype=tf.float32)
         self.y_train = tf.constant(y_train, dtype=tf.float32)
         self.layers = layers
@@ -119,43 +125,87 @@ class Bayesian_NN_Session_2Layer(Distribution):
         self.sess = tf.Session()
 
         self.weights = tuple([tf.placeholder(tf.float32, shape=dim) for dim in layers ])
-        
-        self.X_test = 1
-        Z = self.X_test
-        for w in self.weights[:-1]:
-            Z = tf.tanh(Z @ w)
-        self.y_hat = softmax(Z @ self.weights[-1])
+        self.p_init = tuple([tf.random.normal(dim) for dim in layers])
 
-def __negative_log_posterior(self,X,y,ws):
+        if integrator_stage == 1:
+            self.__init_leapfrog(layers,path_len,step_size)
+
+        self.neg_log_posterior = self.__negative_log_posterior(self.X_train,self.y_train,self.weights)
+        
+        self.X_test = tf.placeholder(tf.float32, shape=[None, X_train.shape[1]])
+        self.y_probs = self.__NN(self.X_test, self.weights)
+
+    def __NN(self,X,ws):
+        Z = X
+        for w in ws[:-1]:
+            Z = tf.tanh(Z @ w)
+        y_hat = softmax(Z @ self.weights[-1])
+
+        return y_hat
+
+    def __negative_log_posterior(self,X,y,ws):
         nl_prior = 0
         for w in ws:
             nl_prior += tf.reduce_sum(w**2)
         nl_prior = nl_prior / (2*self.var)
 
-        Z = X
-        for w in ws:
-            Z = tf.tanh(Z @ w)
-        y_hat = softmax(Z @ self.weights[-1])
+        y_hat = self.__NN(X,ws)
         nll = tf.reduce_sum(categorical_crossentropy(y, y_hat))
 
         return nll + nl_prior
 
-def __negative_log_posterior_gradient(self, X, y, ws):
-    loss = self.__negative_log_posterior(X,y,ws)
-    grads = [ tf.gradients(loss, w)[0] for w in ws]
-    return grads
+    def __negative_log_posterior_gradient(self, X, y, ws):
+        loss = self.__negative_log_posterior(X,y,ws)
+        grads = [ tf.gradients(loss, w)[0] for w in ws]
+        return grads
 
-def __leapfrog(self, ):
-    pass
+    def __init_leapfrog(self, layers, path_len, step_size):
 
-def negative_log_posterior(self,WS):
-    return self.sess.run(self.loss, {self.weights : tuple(WS) })
+        #Run the initial step on the weights placeholder. Other weights "q" will be intermediate values in the unrolled compuation graph
+        q = self.weights
+        p = self.p_init
 
-def negative_log_posterior_gradient(self,WS):
-    return self.sess.run(self.grads, {self.weights : tuple(WS) })
+        p_next = []
+        dq = self.__negative_log_posterior_gradient(self.X_train,self.y_train, q)
+        for p_i,dq_i in zip(p,dq):
+            p_next.append(p_i - step_size*dq_i / 2)
+        p = p_next
 
-def probs(self,X_test,WS):
-    return self.sess.run(self.y_hat, {self.weights: tuple(WS), self.X_test : X_test})
+        for _ in range( int(path_len / step_size)-1):
+
+            q_next = []
+            for p_i,q_i in zip(p,q):
+                q_next.append(q_i + step_size*p_i)
+            q = q_next
+
+            p_next = []
+            dq = self.__negative_log_posterior_gradient(self.X_train,self.y_train,q)
+            for p_i,dq_i in zip(p,dq):
+                p_next.append( p_i - step_size*dq_i )
+            p = p_next
+
+        q_next = []
+        for p_i,q_i in zip(p,q):
+            q_next.append( q_i + step_size*p_i)
+        q = q_next
+
+        p_next = []
+        dq = self.__negative_log_posterior_gradient(self.X_train,self.y_train,q)
+        for p_i,dq_i in zip(p,dq):
+            p_next.append(p_i - step_size*dq_i/2)
+        p = p_next
+
+        self.p_final = [-p_i for p_i in p]
+        self.q_final = q
+
+    def negative_log_posterior(self,ws):
+        return self.sess.run(self.neg_log_posterior, {self.weights : tuple(ws)})
+
+    def probs(self,X_test,WS):
+        return self.sess.run(self.y_probs, {self.weights: tuple(WS), self.X_test : X_test})
+    
+    def run_integrator(self,ws):
+        return self.sess.run([self.p_init, self.p_final, self.q_final], {self.weights : tuple(ws) })
 
 class Stochastic_Bayesian_NN_Session(Distribution):
 

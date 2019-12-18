@@ -10,109 +10,151 @@ import integrators
 
 
 def should_keep_new_sample(p_old, q_old, p_new, q_new, distribution):
-    p_neg_log_prob_old = np.sum([ np.sum(p_i**2) / 2 for p_i in p_old ])
+    p_neg_log_prob_old = np.sum([np.sum(p_i**2) / 2 for p_i in p_old])
     q_neg_log_prob_old = distribution.negative_log_posterior(q_old)
     H_old = p_neg_log_prob_old + q_neg_log_prob_old
 
-    p_neg_log_prob_new = np.sum([ np.sum(p_i**2) / 2 for p_i in p_new ])
+    p_neg_log_prob_new = np.sum([np.sum(p_i**2) / 2 for p_i in p_new])
     q_neg_log_prob_new = distribution.negative_log_posterior(q_new)
     H_new = p_neg_log_prob_new + q_neg_log_prob_new
 
-    p_accept = min(1.0, np.exp(H_old - H_new))
+    energy = np.exp(H_old - H_new)
+    assert(not np.isnan(energy))
+
+    p_accept = min(1.0, energy)
     if np.random.rand() < p_accept:
         return True
     else:
         return False
 
+
+def hamiltonian_monte_carlo_tf(
+        distribution,
+        q0,
+        n_samples,
+        burnin):
+
+    samples = []
+    n_accept = 0
+    size = n_samples + burnin
+
+    progress_bar = Progbar(size)
+    q_old = q0
+
+    for i in range(size):
+
+        [p_old, p_new, q_new] = distribution.run_integrator(q_old)
+
+        if should_keep_new_sample(p_old, q_old, p_new, q_new, distribution):
+            accept = 1
+
+            q_old = q_new
+            if i >= burnin:
+                samples.append([q_i.copy() for q_i in q_new])
+
+                n_accept += 1
+        else:
+            accept = 0
+
+            if i >= burnin:
+                samples.append([q_i.copy() for q_i in q_old])
+
+        progress_bar.update(i+1, values=[("acceptance_rate", accept)])
+
+    return samples, n_accept / len(samples)
+
+
 def hamiltonian_monte_carlo(
-    distribution,
-    q0,
-    n_samples=800,
-    path_len=1,
-    step_size=0.5, 
-    burnin=200,
-    stage=1):
-  
-  momentum_distribution = norm(0,1)
+        distribution,
+        q0,
+        n_samples=800,
+        path_len=1,
+        step_size=0.5,
+        burnin=200,
+        stage=1):
 
-  samples = []
-  n_accept = 0
+    momentum_distribution = norm(0, 1)
 
-  size = n_samples + burnin
+    samples = []
+    n_accept = 0
 
-  progress_bar = Progbar(size)
+    size = n_samples + burnin
 
-  q_old = q0
+    progress_bar = Progbar(size)
 
-  for i in range(size):
+    q_old = q0
 
-    p_old = [momentum_distribution.rvs(size=q_i.shape) for q_i in q_old]
+    for i in range(size):
 
-    if stage == 1:
-        p_new,q_new = integrators.leapfrog(
-            p_old,q_old,distribution,path_len,step_size)
-    elif stage == 2:
-        p_new,q_new = integrators.two_stage_sympletic(
-            p_old,q_old,distribution,path_len,step_size)
-    elif stage == 3:
-        p_new,q_new = integrators.three_stage_symplectic(
-            p_old,q_old,distribution,path_len,step_size)
-    
-    if should_keep_new_sample(p_old, q_old, p_new,q_new, distribution):
-      accept = 1
+        p_old = [momentum_distribution.rvs(size=q_i.shape) for q_i in q_old]
 
-      q_old = q_new
-      if i >= burnin:
-        samples.append([q_i.copy() for q_i in q_new])
-        
-        n_accept += 1
-    else:
-      accept = 0
+        if stage == 1:
+            p_new, q_new = integrators.leapfrog(
+                p_old, q_old, distribution, path_len, step_size)
+        elif stage == 2:
+            p_new, q_new = integrators.two_stage_sympletic(
+                p_old, q_old, distribution, path_len, step_size)
+        elif stage == 3:
+            p_new, q_new = integrators.three_stage_symplectic(
+                p_old, q_old, distribution, path_len, step_size)
 
-      if i >= burnin:
-        samples.append([q_i.copy() for q_i in q_old])
+        if should_keep_new_sample(p_old, q_old, p_new, q_new, distribution):
+            accept = 1
 
-    progress_bar.update(i+1, values=[ ("acceptance_rate", accept) ])
+            q_old = q_new
+            if i >= burnin:
+                samples.append([q_i.copy() for q_i in q_new])
 
-  return samples, n_accept / len(samples)
+                n_accept += 1
+        else:
+            accept = 0
+
+            if i >= burnin:
+                samples.append([q_i.copy() for q_i in q_old])
+
+        progress_bar.update(i+1, values=[("acceptance_rate", accept)])
+
+    return samples, n_accept / len(samples)
 
 
 def stochastic_hamiltonian_monte_carlo(
-    X_train,
-    y_train,
-    distribution,
-    q0,
-    friction=0.01, #Momentum decay rate in SGD
-    batch_size=500,
-    n_samples=800,
-    path_len=1,
-    step_size=0.5, 
-    burnin=200):
-  
-  momentum_distribution = norm(0,1)
+        X_train,
+        y_train,
+        distribution,
+        q0,
+        friction=0.01,  # Momentum decay rate in SGD
+        batch_size=500,
+        n_samples=800,
+        path_len=1,
+        step_size=0.5,
+        burnin=200):
 
-  samples = []
-  n_accept = 0
+    momentum_distribution = norm(0, 1)
 
-  size = n_samples + burnin
+    samples = []
+    n_accept = 0
 
-  progress_bar = Progbar(size)
+    size = n_samples + burnin
 
-  q = q0
+    progress_bar = Progbar(size)
 
-  for i in range(size):
+    q = q0
 
-    p = momentum_distribution.rvs(size=q0.shape)
-    take_indices = np.random.randint(0, X_train.size[0], size=batch_size ) #Sample with replacement -- condition for convergence
-    X_batch = X_train[take_indices, :]
-    y_batch = y_train[take_indices, :]
-    distribution.set_train(X_batch, y_batch)
-    info = distribution.emperical_fisher_information(q)
-    sigma = 2*(friction - info)*step_size
-    noise_distribution = multivariate_normal(np.zeros_like(q), sigma)
-    
-    p,q = integrators.stochastic_euler_forward(p,q,distribution,noise_distribution, friction,path_len,step_size)
+    for i in range(size):
 
-    progress_bar.update(i+1)
+        p = momentum_distribution.rvs(size=q0.shape)
+        # Sample with replacement -- condition for convergence
+        take_indices = np.random.randint(0, X_train.size[0], size=batch_size)
+        X_batch = X_train[take_indices, :]
+        y_batch = y_train[take_indices, :]
+        distribution.set_train(X_batch, y_batch)
+        info = distribution.emperical_fisher_information(q)
+        sigma = 2*(friction - info)*step_size
+        noise_distribution = multivariate_normal(np.zeros_like(q), sigma)
 
-  return samples, n_accept / len(samples)
+        p, q = integrators.stochastic_euler_forward(
+            p, q, distribution, noise_distribution, friction, path_len, step_size)
+
+        progress_bar.update(i+1)
+
+    return samples, n_accept / len(samples)
