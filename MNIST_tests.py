@@ -174,7 +174,7 @@ y_sub = y[:2500,:]
 
 ws = [np.random.normal(size=(X.shape[1], 20)), np.random.normal( size=(20, y_sub.shape[1])) ]
 tf.reset_default_graph()
-bnn = distributions.Bayesian_NN_Session_TFIntegrator(X_sub,y_sub, [w.shape for w in ws ], path_len=1, step_size=.01)
+bnn = distributions.Bayesian_NN_Session_TFIntegrator(X_sub,y_sub, [w.shape for w in ws ], path_len=1, step_size=.03, integrator_stage=3)
 samples,acceptance_rate = HMC.hamiltonian_monte_carlo_tf(bnn, ws, 800, 200)
 
 # bnn = distributions.Bayesian_NN_Session(X_sub,y_sub, [w.shape for w in ws ])

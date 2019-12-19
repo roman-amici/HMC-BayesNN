@@ -4,6 +4,11 @@ from tensorflow.keras.activations import softmax
 from tensorflow.keras.losses import categorical_crossentropy
 import numpy as np
 
+C_TWO = (3 - np.sqrt(3)) / 6
+
+C_THREE = 12127897 / 102017882
+D_THREE = 4271554 / 14421423
+
 class Distribution(abc.ABC):
 
     @abc.abstractmethod
@@ -129,6 +134,10 @@ class Bayesian_NN_Session_TFIntegrator():
 
         if integrator_stage == 1:
             self.__init_leapfrog(layers,path_len,step_size)
+        elif integrator_stage == 2:
+            self.__init_symplectic_2(layers,path_len,step_size)
+        elif integrator_stage == 3:
+            self.__init_symplectic_3(layers,path_len,step_size)
 
         self.neg_log_posterior = self.__negative_log_posterior(self.X_train,self.y_train,self.weights)
         
@@ -195,6 +204,96 @@ class Bayesian_NN_Session_TFIntegrator():
         for p_i,dq_i in zip(p,dq):
             p_next.append(p_i - (step_size*dq_i/2) )
         p = p_next
+
+        self.p_final = [-p_i for p_i in p]
+        self.q_final = q
+
+    def __init_symplectic_2(self, layers, path_len, step_size):
+        p = self.p_init
+        q = self.weights
+
+        for _ in range(int(path_len / step_size)):
+
+            # First Momentum
+            p_next = []
+            dq = self.__negative_log_posterior_gradient(self.X_train,self.y_train,q)
+            for p_i, dq_i in zip(p, dq):
+                p_next.append(p_i - step_size * C_TWO * dq_i)
+            p = p_next
+
+            # First Position Update
+            q_next = []
+            for p_i, q_i in zip(p, q):
+                q_next.append(q_i + step_size * p_i / 2 )
+            q = q_next
+
+            # Second Momentum Update
+            p_next = []
+            dq = self.__negative_log_posterior_gradient(self.X_train,self.y_train,q)
+            for p_i, dq_i in zip(p, dq):
+                p_next.append(p_i - step_size * (1 - 2 * C_TWO) * dq_i)
+            p = p_next
+
+            # Second Position Update
+            q_next = []
+            for p_i, q_i in zip(p, q):
+                q_next.append(q_i + step_size * p_i / 2)
+            q = q_next
+
+            # Third Momentum update
+            p_next = []
+            dq = self.__negative_log_posterior_gradient(self.X_train,self.y_train,q)
+            for p_i, dq_i in zip(p, dq):
+                p_next.append(p_i - step_size * C_TWO * dq_i)
+            p = p_next
+
+        self.p_final = [-p_i for p_i in p]
+        self.q_final = q
+
+    def __init_symplectic_3(self, layers, path_len, step_size):
+        p = self.p_init
+        q = self.weights
+
+        for _ in range(int(path_len / step_size)):
+
+            p_next = []
+            dq = self.__negative_log_posterior_gradient(self.X_train,self.y_train,q)
+            for p_i, dq_i in zip(p, dq):
+                p_next.append(p_i - step_size * C_THREE * dq_i)
+            p = p_next
+
+            q_next = []
+            for p_i, q_i in zip(p, q):
+                q_next.append(q_i + step_size * D_THREE * p_i)
+            q = q_next
+            
+            p_next = []
+            dq = self.__negative_log_posterior_gradient(self.X_train,self.y_train,q)
+            for p_i, dq_i in zip(p, dq):
+                p_next.append(p_i - step_size * (0.5 - C_THREE) * dq_i)
+            p = p_next
+
+            q_next = []
+            for p_i, q_i in zip(p, q):
+                q_next.append(q_i + step_size * (1 - 2 * D_THREE) * p_i)
+            q = q_next
+
+            p_next = []
+            dq = self.__negative_log_posterior_gradient(self.X_train,self.y_train,q)
+            for p_i, dq_i in zip(p, dq):
+                p_next.append(p_i - step_size * (0.5 - C_THREE) * dq_i)
+            p = p_next
+
+            q_next = []
+            for p_i, q_i in zip(p, q):
+                q_next.append(q_i + step_size * D_THREE * p_i)
+            q = q_next
+
+            p_next = []
+            dq = self.__negative_log_posterior_gradient(self.X_train,self.y_train,q)
+            for p_i, dq_i in zip(p, dq):
+                p_next.append(p_i - step_size * C_THREE * dq_i)
+            p = p_next
 
         self.p_final = [-p_i for p_i in p]
         self.q_final = q
