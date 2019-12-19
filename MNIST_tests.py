@@ -164,5 +164,19 @@ def normalized_search(
                 )
 
 #acceptance_rate_search("unnormalized.csv")
+# for samples in [10000,50000]:
+#     normalized_search("normalized.csv", samples, 5)
 
-normalized_search("normalized-beast.csv", 50000, 10, 3000, 500)
+X,y,X_val,y_val,_,_ = get_mnist()
+
+X_sub = X[:2500,:]
+y_sub = y[:2500,:]
+
+ws = [np.random.normal(size=(X.shape[1], 20)), np.random.normal( size=(20, y_sub.shape[1])) ]
+tf.reset_default_graph()
+bnn = distributions.Bayesian_NN_Session_TFIntegrator(X_sub,y_sub, [w.shape for w in ws ], path_len=1, step_size=.01)
+samples,acceptance_rate = HMC.hamiltonian_monte_carlo_tf(bnn, ws, 800, 200)
+
+# bnn = distributions.Bayesian_NN_Session(X_sub,y_sub, [w.shape for w in ws ])
+
+# HMC.hamiltonian_monte_carlo(bnn, ws, path_len=1, step_size=0.01)

@@ -136,10 +136,11 @@ class Bayesian_NN_Session_TFIntegrator():
         self.y_probs = self.__NN(self.X_test, self.weights)
 
     def __NN(self,X,ws):
+
         Z = X
         for w in ws[:-1]:
             Z = tf.tanh(Z @ w)
-        y_hat = softmax(Z @ self.weights[-1])
+        y_hat = softmax(Z @ ws[-1])
 
         return y_hat
 
@@ -162,13 +163,13 @@ class Bayesian_NN_Session_TFIntegrator():
     def __init_leapfrog(self, layers, path_len, step_size):
 
         #Run the initial step on the weights placeholder. Other weights "q" will be intermediate values in the unrolled compuation graph
-        q = self.weights
         p = self.p_init
+        q = self.weights
 
         p_next = []
         dq = self.__negative_log_posterior_gradient(self.X_train,self.y_train, q)
         for p_i,dq_i in zip(p,dq):
-            p_next.append(p_i - step_size*dq_i / 2)
+            p_next.append(p_i - (step_size*dq_i / 2) )
         p = p_next
 
         for _ in range( int(path_len / step_size)-1):
@@ -192,7 +193,7 @@ class Bayesian_NN_Session_TFIntegrator():
         p_next = []
         dq = self.__negative_log_posterior_gradient(self.X_train,self.y_train,q)
         for p_i,dq_i in zip(p,dq):
-            p_next.append(p_i - step_size*dq_i/2)
+            p_next.append(p_i - (step_size*dq_i/2) )
         p = p_next
 
         self.p_final = [-p_i for p_i in p]
